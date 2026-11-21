@@ -1,0 +1,8 @@
+# FILE GHI ĐÈ lên scenarios.yaml. Học thích nghi, quy tắc relative (so với bình quân hệ thống).
+# Giá trị CHƯA HIỆU CHỈNH, chờ Huy duyệt.
+parameters:
+  adaptive_learning: true
+  learning_rule: relative
+  learning_down_step: 0.05   # điểm %/QUÝ: bước giảm (đối xứng với bước tăng)
+  learning_up_step: 0.05     # điểm %/QUÝ: bước tăng
+  learning_nim_condition: true

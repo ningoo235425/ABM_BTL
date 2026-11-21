@@ -27,6 +27,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description='Chạy cả mô phỏng 3 kịch bản và phân tích nâng cao ABM.'
     )
+    parser.add_argument('--config', type=Path, default=Path('configs/scenarios.yaml'),
+                        help='YAML tham số (mặc định: configs/scenarios.yaml)')
     parser.add_argument('--banks', type=Path, default=DEFAULT_BANKS,
                         help='CSV khởi tạo ngân hàng (mặc định: Q1/2023)')
     parser.add_argument('--runs', type=int, default=60,
@@ -54,7 +56,11 @@ def main() -> int:
         if path is not None and not absolute(path).is_file():
             parser.error(f'Không tìm thấy file {label}: {absolute(path)}')
 
-    common = ['--banks', str(banks), '--runs', str(args.runs)]
+    config = absolute(args.config)
+    if not config.is_file():
+        parser.error(f'Không tìm thấy file --config: {config}')
+
+    common = ['--config', str(config), '--banks', str(banks), '--runs', str(args.runs)]
     advanced = [*common, '--sensitivity-runs', str(args.sensitivity_runs)]
     if args.panel is not None:
         advanced.extend(['--panel', str(absolute(args.panel))])

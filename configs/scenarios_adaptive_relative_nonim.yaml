@@ -1,0 +1,8 @@
+# FILE GHI ĐÈ lên scenarios.yaml. Như scenarios_adaptive_relative.yaml nhưng KHÔNG điều kiện nim_i >= nim_bar.
+# Giá trị CHƯA HIỆU CHỈNH, chờ Huy duyệt.
+parameters:
+  adaptive_learning: true
+  learning_rule: relative
+  learning_down_step: 0.05
+  learning_up_step: 0.05
+  learning_nim_condition: false

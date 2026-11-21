@@ -1,0 +1,5 @@
+# FILE GHI ĐÈ lên scenarios.yaml (load_config trộn đệ quy). Chỉ chứa khóa khác biệt.
+# Học thích nghi, quy tắc absolute (ngưỡng tuyệt đối g*, n*).
+parameters:
+  adaptive_learning: true
+  learning_rule: absolute

@@ -63,7 +63,7 @@ def test_policy_activation():
     model.regulator.step()
     assert not model.regulator.policy_active
 
-    model.month = 12
+    model.month = 14
     model.regulator.step()
 
     assert model.regulator.policy_active
@@ -94,7 +94,7 @@ def test_invariants():
         assert (frame[cols] >= 0).all().all()
 
         assert (
-            frame.loan_deposit_ratio <= 1.15 + 1e-9
+            frame.loan_deposit_ratio <= 1.60 + 1e-9
         ).all()
 
 

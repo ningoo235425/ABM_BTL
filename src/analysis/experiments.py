@@ -17,12 +17,29 @@ from .sensitivity_grid import make_sensitivity_grid
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def _deep_merge(base, override):
+    """Trộn đệ quy: khóa trong override thay thế khóa cùng tên trong base."""
+    out = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
 def load_config(path=None):
-    with open(
-        path or ROOT / "configs/scenarios.yaml",
-        encoding="utf-8"
-    ) as f:
-        return yaml.safe_load(f)
+    """Nạp configs/scenarios.yaml, rồi trộn file ghi đè (nếu có) lên trên.
+
+    File ghi đè chỉ cần chứa các khóa khác scenarios.yaml.
+    """
+    base_path = ROOT / "configs/scenarios.yaml"
+    with open(base_path, encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+    if path and Path(path).resolve() != base_path.resolve():
+        with open(path, encoding="utf-8") as f:
+            config = _deep_merge(config, yaml.safe_load(f) or {})
+    return config
 
 
 # ==================================================

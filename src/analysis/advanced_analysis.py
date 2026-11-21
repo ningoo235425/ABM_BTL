@@ -1115,6 +1115,11 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
+        "--config",
+        default=str(ROOT / "configs/scenarios.yaml")
+    )
+
+    parser.add_argument(
         "--banks",
         help="CSV khởi tạo ngân hàng Q1/2023"
     )
@@ -1153,7 +1158,7 @@ def main():
 
     args = parser.parse_args()
 
-    cfg = load_config()
+    cfg = load_config(args.config)
 
     output = create_run_folder(
         "PhanTichABC"

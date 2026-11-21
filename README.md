@@ -125,6 +125,26 @@ parameters:
   deposit_cap_factor: 0.25
   max_loan_to_deposit: 1.60
 
+  # Hằng số hành vi (giá trị giả định, chưa hiệu chỉnh)
+  base_deposit_rate_step: 0.018
+  loan_spread_add: 1.35
+  borrower_reference_rate: 9.5
+  borrower_base_growth: 0.006
+  margin_floor: 2.2
+
+  # Học thích nghi (tùy chọn, mặc định TẮT)
+  adaptive_learning: false
+  learning_up_step: 0.05
+  learning_down_step: 0.10
+  learning_growth_threshold: 0.006
+  learning_nim_threshold: 5.5875
+  learning_rule: absolute
+  learning_deadband: 0.005
+  learning_benchmark: simple
+  learning_nim_condition: true
+  margin_min: 2.2
+  margin_max: 4.2
+
 sensitivity_relative_width: 0.30
 ```
 
@@ -142,6 +162,23 @@ sensitivity_relative_width: 0.30
 | `max_loan_to_deposit` | Giới hạn kỹ thuật dư nợ/tiền gửi của mô hình |
 | `policy_month` | Tham số xác định thời điểm bắt đầu can thiệp |
 | `sensitivity_relative_width` | Phạm vi phân tích độ nhạy quanh giá trị cơ sở |
+| `base_deposit_rate_step` | Mức tăng cơ sở của lãi suất huy động, điểm %/năm **mỗi quý** (trước đây cứng `0.018`) |
+| `loan_spread_add` | Biên cộng thêm vào lãi suất cho vay mục tiêu, điểm % (trước đây cứng `1.35`) |
+| `borrower_reference_rate` | Lãi suất cho vay tham chiếu của khối người vay, %/năm (trước đây cứng `9.5`) |
+| `borrower_base_growth` | Tăng trưởng dư nợ cơ sở tại lãi suất tham chiếu, tỷ lệ **mỗi quý** (trước đây cứng `0.006`) |
+| `margin_floor` | Biên `nim_proxy` tham chiếu trong xác suất tuân thủ của NHNN, điểm % (trước đây cứng `2.2`) |
+| `adaptive_learning` | Bật/tắt học thích nghi của ngân hàng (`false` = kết quả giống bản cũ) |
+| `learning_up_step` | Bước tăng `target_margin` mỗi quý, điểm % (khởi điểm 0.05, **chưa hiệu chỉnh, chờ Huy duyệt**) |
+| `learning_down_step` | Bước giảm `target_margin` mỗi quý, điểm % (khởi điểm 0.10, **chưa hiệu chỉnh**) |
+| `learning_growth_threshold` | g\*: ngưỡng tăng trưởng dư nợ quý để được tăng biên (0.006, **chưa hiệu chỉnh**) |
+| `learning_nim_threshold` | n\*: ngưỡng `nim_proxy` để được tăng biên, điểm %/năm; cố định 5.5875 = bình quân gia quyền theo dư nợ tại t=0 |
+| `learning_rule` | `absolute` (mặc định, ngưỡng g\*, n\*) hoặc `relative` (so với bình quân hệ thống) |
+| `learning_deadband` | θ: vùng chết quanh tăng trưởng bình quân hệ thống, tỷ lệ/quý (0.005, **chưa hiệu chỉnh, chờ Huy duyệt**); chỉ dùng khi `relative` |
+| `learning_benchmark` | Mốc hệ thống của `relative`: `simple` (bình quân đơn giản 8 NH, mặc định, chờ Huy duyệt) hoặc `weighted` (gia quyền dư nợ) |
+| `learning_nim_condition` | `relative`: `true` thì chỉ tăng biên khi `nim_proxy` của NH ≥ bình quân hệ thống |
+| `margin_min`, `margin_max` | Sàn và trần của `target_margin`, điểm % (2.2 và 4.2, **chưa hiệu chỉnh**) |
+
+Chi tiết cơ chế học: `docs/nang_cap_hoc_thich_nghi.md`. Chạy bản bật học: `python main.py --config configs/scenarios_adaptive.yaml` (file ghi đè: `load_config` luôn nạp `scenarios.yaml` rồi trộn đệ quy file này lên trên, nên file chỉ chứa khóa khác biệt). Chẩn đoán độ nhạy θ/benchmark: `python -m src.analysis.relative_sensitivity --seeds 10` (kết quả trong `docs/nang_cap_hoc_thich_nghi.md` mục 6). Quy tắc relative: `configs/scenarios_adaptive_relative.yaml` và `configs/scenarios_adaptive_relative_nonim.yaml` (không điều kiện nim); cả hai chưa hiệu chỉnh.
 
 ### 3.3. Cách thay đổi tham số
 
@@ -268,7 +305,10 @@ ABM_LaiSuat_Vu/
 ├── README.md
 │
 ├── configs/
-│   └── scenarios.yaml
+│   ├── scenarios.yaml
+│   ├── scenarios_adaptive.yaml
+│   ├── scenarios_adaptive_relative.yaml
+│   └── scenarios_adaptive_relative_nonim.yaml
 │
 ├── data/
 │   └── clean/

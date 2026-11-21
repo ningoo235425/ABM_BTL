@@ -31,6 +31,36 @@ parameters:
   # Tran ky thuat cho ty le du no / tien gui
   max_loan_to_deposit: 1.60
 
+  # Hang so hanh vi truoc day cung trong code (gia tri giu nguyen, GIA DINH chua hieu chinh)
+  base_deposit_rate_step: 0.018    # diem %/nam moi QUY: muc tang co so cua lai suat huy dong
+  loan_spread_add: 1.35            # diem %: bien cong them vao muc tieu lai suat cho vay
+  borrower_reference_rate: 9.5     # %/nam: lai suat cho vay tham chieu cua khoi nguoi vay
+  borrower_base_growth: 0.006      # ty le/QUY: tang truong du no co so tai lai suat tham chieu
+  margin_floor: 2.2                # diem %: bien nim_proxy tham chieu trong xac suat tuan thu cua NHNN
+
+  # --- Hoc thich nghi cua ngan hang (TUY CHON, mac dinh TAT) ---
+  # Gia tri khoi diem, CHUA HIEU CHINH, cho Huy duyet.
+  # Cuoi moi quy, moi ngan hang chinh target_margin cho quy sau:
+  #  - thi phan du no giam so voi quy truoc -> giam bien learning_down_step
+  #  - nguoc lai, neu tang truong du no >= g* va nim_proxy >= n* -> tang bien learning_up_step
+  #  - ca hai cung xay ra thi chi giam. Bien bi chan trong [margin_min, margin_max].
+  adaptive_learning: false
+  learning_up_step: 0.05           # diem %/QUY: buoc tang bien
+  learning_down_step: 0.10         # diem %/QUY: buoc giam bien
+  learning_growth_threshold: 0.006 # g*: ty le/QUY, bang tang truong du no co so
+  # n*: nim_proxy binh quan gia quyen theo du no cua he thong tai t=0, tinh MOT LAN tu
+  # data/clean/abm_initial_8nganhang_2023Q1.csv: nim_i = loan_rate - (deposit_rate*(1-casa_ratio)+0.15),
+  # n* = sum(nim_i*loans_i)/sum(loans_i) = 5.5875. Don vi: diem %/nam. Khong tinh tu dong luc chay.
+  learning_nim_threshold: 5.5875
+  # Quy tac hoc "relative" (TUY CHON, mac dinh TAT = absolute). CHUA HIEU CHINH, cho Huy duyet.
+  #  - g_i < g_bar - theta -> giam bien; g_i > g_bar + theta VA (nim_i >= nim_bar neu bat dieu kien nim) -> tang bien; con lai giu.
+  learning_rule: absolute          # absolute | relative
+  learning_deadband: 0.005         # theta: ty le tang truong/QUY, vung chet quanh g_bar
+  learning_benchmark: simple       # simple = binh quan don gian 8 NH | weighted = gia quyen du no
+  learning_nim_condition: true     # true: chi tang bien khi nim_i >= nim_bar
+  margin_min: 2.2                  # diem %: san cua target_margin
+  margin_max: 4.2                  # diem %: tran cua target_margin
+
 scenarios:
   A: "Khong can thiep"
   B: "Chi dao giam lai suat"

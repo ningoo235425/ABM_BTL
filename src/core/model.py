@@ -58,7 +58,7 @@ class ABMModel(Model):
             p.get("policy_step", 0.28)
         )
         self.policy_month = int(
-            p.get("policy_month", 12)
+            p.get("policy_month", 14)
         )
         self.deposit_competition = float(
             p.get("deposit_competition", 0.07)
@@ -67,8 +67,59 @@ class ABMModel(Model):
             p.get("deposit_cap_factor", 0.25)
         )
         self.max_loan_to_deposit = float(
-            p.get("max_loan_to_deposit", 1.15)
+            p.get("max_loan_to_deposit", 1.60)
         )
+
+        # Hằng số hành vi trước đây cứng trong agent (giá trị giữ nguyên)
+        self.base_deposit_rate_step = float(
+            p.get("base_deposit_rate_step", 0.018)
+        )
+        self.loan_spread_add = float(
+            p.get("loan_spread_add", 1.35)
+        )
+
+        # Học thích nghi (tùy chọn, mặc định TẮT để tái lập kết quả cũ)
+        self.adaptive_learning = bool(
+            p.get("adaptive_learning", False)
+        )
+        self.learning_up_step = float(
+            p.get("learning_up_step", 0.05)
+        )
+        self.learning_down_step = float(
+            p.get("learning_down_step", 0.10)
+        )
+        self.learning_growth_threshold = float(
+            p.get("learning_growth_threshold", 0.006)
+        )
+        self.learning_nim_threshold = float(
+            p.get("learning_nim_threshold", 5.5875)
+        )
+        # Quy tắc học "relative": so sánh với mốc bình quân hệ thống (mặc định TẮT)
+        self.learning_rule = str(p.get("learning_rule", "absolute"))
+        self.learning_deadband = float(
+            p.get("learning_deadband", 0.005)
+        )
+        self.learning_benchmark = str(
+            p.get("learning_benchmark", "simple")
+        )
+        self.learning_nim_condition = bool(
+            p.get("learning_nim_condition", True)
+        )
+        self.margin_min = float(p.get("margin_min", 2.2))
+        self.margin_max = float(p.get("margin_max", 4.2))
+
+        if self.learning_rule not in ("absolute", "relative"):
+            raise ValueError("learning_rule phải là absolute hoặc relative")
+        if self.learning_benchmark not in ("simple", "weighted"):
+            raise ValueError("learning_benchmark phải là simple hoặc weighted")
+        if self.learning_deadband < 0:
+            raise ValueError("learning_deadband phải không âm")
+        self._learning_stats_cache = None
+
+        if self.margin_min > self.margin_max:
+            raise ValueError("margin_min không được lớn hơn margin_max")
+        if self.learning_up_step < 0 or self.learning_down_step < 0:
+            raise ValueError("Bước học phải không âm")
 
         if self.n_months <= 0:
             raise ValueError("n_months phải dương")
@@ -83,6 +134,9 @@ class ABMModel(Model):
             self,
             pressure=float(
                 p.get("policy_pressure", 0.65)
+            ),
+            margin_floor=float(
+                p.get("margin_floor", 2.2)
             ),
         )
 
@@ -99,6 +153,12 @@ class ABMModel(Model):
             self,
             elasticity=float(
                 p.get("borrower_elasticity", 0.012)
+            ),
+            reference_rate=float(
+                p.get("borrower_reference_rate", 9.5)
+            ),
+            base_growth=float(
+                p.get("borrower_base_growth", 0.006)
             ),
         )
 
@@ -164,6 +224,14 @@ class ABMModel(Model):
         if not banks:
             raise ValueError(
                 "Danh sách ngân hàng không được rỗng"
+            )
+
+        # Trạng thái đầu kỳ cho học thích nghi (không dùng số ngẫu nhiên)
+        total_loans = sum(b.loans for b in banks)
+        for bank in banks:
+            bank.prev_loans = bank.loans
+            bank.prev_loan_share = (
+                bank.loans / total_loans if total_loans > 0 else 0.0
             )
 
         return banks
@@ -250,6 +318,9 @@ class ABMModel(Model):
                     bank.policy_complied
                 ),
                 "policy_cut": bank.policy_cut,
+
+                # Biên mục tiêu áp dụng cho quý kế tiếp (cột mới)
+                "target_margin": bank.target_margin,
             })
 
         # 7. Tổng hợp trạng thái toàn hệ thống

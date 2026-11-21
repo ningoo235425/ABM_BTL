@@ -68,9 +68,9 @@ class Bank(Agent):
             min(0.5, ldr - 0.82)
         )
 
-        # 0.018 là mức điều chỉnh cơ sở GIẢ ĐỊNH MỖI QUÝ.
+        # base_deposit_rate_step: mức điều chỉnh cơ sở GIẢ ĐỊNH MỖI QUÝ (YAML).
         desired_increase = (
-            0.018
+            model.base_deposit_rate_step
             + model.deposit_competition * demand_pressure
         )
 
@@ -87,11 +87,11 @@ class Bank(Agent):
         )
 
         # 3. Lãi suất cho vay phản ứng với chi phí vốn trễ
-        # Biên cộng 1.35 điểm % là giả định cố định, chưa hiệu chỉnh.
+        # loan_spread_add (điểm %) là giả định cố định, chưa hiệu chỉnh (YAML).
         target_rate = (
             self.lagged_funding_cost
             + self.target_margin
-            + 1.35
+            + model.loan_spread_add
         )
 
         self.loan_rate += model.pass_through * (
@@ -138,3 +138,114 @@ class Bank(Agent):
     def finish_month(self):
         """Cập nhật chi phí vốn trễ cuối quý. Giữ tên để tương thích."""
         self.lagged_funding_cost = self.funding_cost
+
+        if self.model.adaptive_learning:
+            if self.model.learning_rule == "relative":
+                self._learn_margin_relative()
+            else:
+                self._learn_margin()
+
+    def _system_learning_stats(self):
+        """Mốc hệ thống cho quy tắc relative: (g_bar, nim_bar).
+
+        Tính MỘT LẦN mỗi quý (cache theo model.month), trước khi ngân hàng nào
+        cập nhật prev_loans trong finish_month, để mọi ngân hàng dùng cùng mốc.
+        simple: bình quân đơn giản giữa các ngân hàng; weighted: gia quyền dư nợ.
+        """
+        model = self.model
+        cache = model._learning_stats_cache
+        if cache is not None and cache[0] == model.month:
+            return cache[1]
+
+        banks = model.banks
+        if model.learning_benchmark == "weighted":
+            total_prev = sum(b.prev_loans for b in banks)
+            total_now = sum(b.loans for b in banks)
+            g_bar = total_now / total_prev - 1 if total_prev > 0 else 0.0
+            nim_bar = (
+                sum(b.nim_proxy * b.loans for b in banks) / total_now
+                if total_now > 0 else 0.0
+            )
+        else:
+            g_bar = sum(
+                (b.loans / b.prev_loans - 1) if b.prev_loans > 0 else 0.0
+                for b in banks
+            ) / len(banks)
+            nim_bar = sum(b.nim_proxy for b in banks) / len(banks)
+
+        stats = (g_bar, nim_bar)
+        model._learning_stats_cache = (model.month, stats)
+        return stats
+
+    def _learn_margin_relative(self):
+        """Học relative: so tăng trưởng dư nợ của mình với bình quân hệ thống.
+
+        - g_i < g_bar - theta -> giảm biên learning_down_step.
+        - g_i > g_bar + theta VÀ (nim_i >= nim_bar nếu learning_nim_condition)
+          -> tăng biên learning_up_step.
+        - Còn lại giữ nguyên. Biên bị chặn trong [margin_min, margin_max].
+        Không dùng số ngẫu nhiên.
+        """
+        model = self.model
+        g_bar, nim_bar = self._system_learning_stats()
+
+        growth = (
+            self.loans / self.prev_loans - 1
+            if self.prev_loans > 0 else 0.0
+        )
+        theta = model.learning_deadband
+
+        if growth < g_bar - theta:
+            self.target_margin -= model.learning_down_step
+        elif growth > g_bar + theta and (
+            not model.learning_nim_condition
+            or self.nim_proxy >= nim_bar
+        ):
+            self.target_margin += model.learning_up_step
+
+        self.target_margin = max(
+            model.margin_min,
+            min(model.margin_max, self.target_margin),
+        )
+
+        total_loans = sum(b.loans for b in model.banks)
+        self.prev_loans = self.loans
+        self.prev_loan_share = (
+            self.loans / total_loans if total_loans > 0 else 0.0
+        )
+
+    def _learn_margin(self):
+        """Học thích nghi: chỉnh target_margin cho quý sau theo kết quả quý này.
+
+        - Thị phần dư nợ giảm -> giảm biên một bước learning_down_step.
+        - Nếu không: tăng trưởng dư nợ >= g* và nim_proxy >= n* -> tăng biên
+          một bước learning_up_step. Cả hai cùng xảy ra thì chỉ giảm.
+        - Biên bị chặn trong [margin_min, margin_max]. Không dùng số ngẫu nhiên.
+        """
+        model = self.model
+
+        total_loans = sum(b.loans for b in model.banks)
+        share = self.loans / total_loans if total_loans > 0 else 0.0
+        growth = (
+            self.loans / self.prev_loans - 1
+            if self.prev_loans > 0 else 0.0
+        )
+
+        share_fell = share < self.prev_loan_share
+        doing_well = (
+            growth >= model.learning_growth_threshold
+            and self.nim_proxy >= model.learning_nim_threshold
+        )
+
+        if share_fell:
+            self.target_margin -= model.learning_down_step
+        elif doing_well:
+            self.target_margin += model.learning_up_step
+
+        self.target_margin = max(
+            model.margin_min,
+            min(model.margin_max, self.target_margin),
+        )
+
+        self.prev_loans = self.loans
+        self.prev_loan_share = share
